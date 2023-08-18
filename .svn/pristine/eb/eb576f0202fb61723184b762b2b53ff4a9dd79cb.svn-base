@@ -1,0 +1,265 @@
+import '../style.css'
+import * as THREE from "three";
+import * as TWEEN from "@tweenjs/tween.js";
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { Tween } from 'tween';
+
+const COUNT = 5;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0);
+
+const el = document.querySelector("canvas");
+const renderer = new THREE.WebGLRenderer({ antialias: true, canvas: el });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+var axesHelper = new THREE.AxesHelper(5);
+// scene.add(axesHelper);
+
+// Camera
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 0, 0.25);
+camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+// const camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.1, 1000 );
+// camera.position.set(0, 0, 0.2);
+// camera.updateProjectionMatrix();
+
+// var controls = new OrbitControls( camera, renderer.domElement );
+
+// Lights
+// const ambientLight = new THREE.DirectionalLight(0x0000ff);
+// ambientLight.position.set(-1, -1, -1).normalize();
+// scene.add(ambientLight);
+
+const light = new THREE.HemisphereLight(0xffffff, 0x000000);
+light.position.set(2, 2, 0.5);
+scene.add(light);
+
+// Materials
+const materials = [];
+const card_color_list = [0xcbbce5, 0x5f5d5b, 0xe2d4a7, 0x554762, 0xf29591];
+for (let i = 0; i < COUNT; i++) {
+	let mat = new THREE.MeshStandardMaterial({ 
+		color: card_color_list[i % card_color_list.length] ,
+		metalness : 0.05,
+		roughness : 0.2,
+		aoMapIntensity: 1
+	});
+	materials.push(mat);
+}
+
+// init angle
+const radius = 0.1;
+const card_angle_list = [];
+const start_angle = -72;
+
+for (let i = 0; i < COUNT; i++) {
+	card_angle_list[i] = start_angle + i * 180 / COUNT;
+}
+
+// Cards
+const cards = [];
+let pattern_credit
+let x = 0;
+let y = 0;
+let z = 0;
+
+let delta = 3;
+
+new GLTFLoader().load('cards.glb', res => {
+
+	pattern_credit = res.scene;
+	let cur_angle = 0;
+
+	for (let i = 0; i < COUNT; i++) {
+	
+		let s = pattern_credit.clone();
+		cur_angle = card_angle_list[i];
+		s.traverse(function(node) {
+			if (node.isMesh) {
+				node.material = materials[i];
+			}
+		});
+
+		x = radius * Math.sin(cur_angle * Math.PI / 180);
+		z = radius * Math.cos(cur_angle * Math.PI / 180);
+		s.position.set(x, y, z);
+		
+		s.rotation.x = 0;
+		s.rotation.y = (cur_angle + 90 )* Math.PI / 180;
+		s.rotation.z = 0;
+
+		cards.push(s);
+		scene.add(s);
+	}
+
+	tweenCards();
+});
+
+
+let step_x = 0;
+let step_y = 0;
+let step_z = 0;
+
+// Tween Cards
+let flag_dir = 1;
+var prev_dir = 1;
+
+function tweenCards() {
+
+	const time = 100;
+	if(flag_dir != 0){
+
+		let cur_angle = 0;
+		for (let i = 0; i < cards.length; i++) {
+
+			const card = cards[i];
+			cur_angle = card_angle_list[i];
+
+			step_x = radius * Math.sin(cur_angle * Math.PI / 180);
+			step_z = radius * Math.cos(cur_angle * Math.PI / 180);
+	
+			new TWEEN.Tween(card.position)
+				.to({x:step_x, y:step_y, z:step_z}, time)
+				.easing(TWEEN.Easing.Quadratic.InOut)
+				.start();
+	
+			let target_angle = 0;
+			if(is_open(cur_angle)) target_angle = cur_angle * Math.PI / 180
+			else target_angle = (cur_angle + 90 )* Math.PI / 180;
+	
+			new TWEEN.Tween(card.rotation)
+				.to({x:0, y:target_angle, z:0}, time)
+				.easing(TWEEN.Easing.Quadratic.InOut)
+				.start();
+	
+			if(flag_dir == 1){
+				if(is_skip(cur_angle)) card_angle_list[i] += 180;
+				card_angle_list[i] += delta;
+			}
+			else{
+				if(is_skip(cur_angle)) card_angle_list[i] -= 180;
+				card_angle_list[i] -= delta;
+			}
+		}
+	}
+
+	setTimeout(() => {
+		tweenCards();
+	}, time);
+}
+
+function is_skip(v) {
+
+	if(flag_dir == 1){ // right
+		if( v % 360 == 90 ||  v % 360 == -270) return true;
+		return false;
+	}
+	if(flag_dir == -1){ // left
+		if( v % 360 == -90 ||  v % 360 == 270) return true;
+		return false;
+	}
+}
+
+function is_open(v) {
+
+	let absv = Math.abs(v);
+	if(absv % 360 >= 0  && absv % 360 <=18  ) return true;
+	if( absv % 360 >= 342 &&  absv % 360 < 360) return true;
+	return false;
+}
+
+document.addEventListener( 'wheel', onDocumentMouseWheel );
+function onDocumentMouseWheel( event ) {
+	if (event.deltaY == 100) {
+		flag_dir = -1;
+	}
+	if (event.deltaY == -100) {
+		flag_dir = 1;
+	}
+	prev_dir = flag_dir;
+}
+
+var start_mouse_x;
+
+const raycaster = new THREE.Raycaster();
+
+document.addEventListener( 'mousedown', onDocumentMousedown );
+function onDocumentMousedown( event ) {
+	start_mouse_x = event.screenX;
+}
+
+document.addEventListener( 'mouseup', onDocumentMouseup );
+function onDocumentMouseup( event ) {
+	var delta_x = start_mouse_x - event.screenX;
+	if (delta_x > 0) {
+		flag_dir = -1
+	}
+	if (delta_x < 0) {
+		flag_dir = 1
+	}
+	prev_dir = flag_dir;
+
+	// var vector = new THREE.Vector3( 
+	// 	( event.clientX / window.innerWidth ) * 2 - 1, 
+	// 	- ( event.clientY / window.innerHeight ) * 2 + 1, 0.5 
+	// );
+	// vector.unproject( camera );
+	// raycaster.set( camera.position, vector.sub( camera.position ).normalize() );
+
+	// for (let i = 0; i < cards.length; i++) {
+	// 	var intersects = raycaster.intersectObject( cards[i] );
+	// 	if (intersects.length > 0) {
+	// 		initCardAngle(i);
+	// 		return
+	// 	}
+	// }
+
+}
+
+document.addEventListener( 'mousemove', onDocumentMousemove );
+function onDocumentMousemove( event ) {
+	
+	var vector = new THREE.Vector3( 
+		( event.clientX / window.innerWidth ) * 2 - 1, 
+		- ( event.clientY / window.innerHeight ) * 2 + 1, 0.5 
+	);
+	vector.unproject( camera );
+	raycaster.set( camera.position, vector.sub( camera.position ).normalize() );
+
+	for (let i = 0; i < cards.length; i++) {
+		var intersects = raycaster.intersectObject( cards[i] );
+		if (intersects.length > 0) {
+			flag_dir = 0;
+			// console.log(i);
+			// initCardAngle(i);
+			return
+		}
+	}
+
+	flag_dir = prev_dir;
+
+}
+
+function initCardAngle(idx){
+
+	let prev_angle = card_angle_list[idx];
+	let tmp = prev_angle % 360;
+	let target_angle = 360 * ((prev_angle - tmp)/ 360);	
+	let delta_angle = target_angle - prev_angle;
+
+	for (let i = 0; i < cards.length; i++) {
+		card_angle_list[i] += delta_angle;
+	}
+}
+
+// Animate
+const animate = (time) => {
+
+	TWEEN.update();
+	renderer.render(scene, camera);
+	requestAnimationFrame(animate);
+};
+animate();

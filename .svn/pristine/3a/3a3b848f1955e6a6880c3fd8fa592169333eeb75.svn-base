@@ -1,0 +1,68 @@
+import '../style.css'
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import Stats from "three/examples/jsm/libs/stats.module";
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { setupCounter } from './counter.js'
+
+let renderer, camera, scene, controls, stats;
+
+const init = () => {
+
+	renderer = new THREE.WebGLRenderer( { antialias: true } );
+	renderer.setPixelRatio( window.devicePixelRatio );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.outputColorSpace = THREE.SRGBColorSpace;
+	renderer.setClearColor(0xffffff, 1);
+	document.body.appendChild( renderer.domElement );
+  
+	scene = new THREE.Scene();
+  
+	const color = 0xffffff
+	const intensity = 1
+	const light = new THREE.DirectionalLight(color, intensity)
+	light.position.set(0, 10, 5)
+	light.target.position.set(-5, 0, 0)
+	scene.add(light)
+	scene.add(light.target)
+	const light2 = new THREE.DirectionalLight(color, intensity)
+	light2.position.set(0, 10, -5)
+	light2.target.position.set(-5, 0, 0)
+	scene.add(light2)
+	scene.add(light2.target)
+	
+	camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 0.1, 1000 );
+	camera.position.set(0, 0, 0.2);
+	camera.updateProjectionMatrix();
+	
+	// scene.add(camera);
+
+	controls = new OrbitControls( camera, renderer.domElement );
+	
+	// stats setup
+	stats = new Stats();
+	document.body.appendChild( stats.dom );
+  
+	new GLTFLoader().load('cards.glb', res => {
+		
+		const gltfScene = res.scene;
+
+		gltfScene.position.set(0, 0, 0);
+		// gltfScene.setClearColor(0x00ff00, 0.8);
+
+		scene.add(gltfScene);
+		console.log(scene);
+	});
+}
+
+const render = () => {
+	stats.update();
+	requestAnimationFrame(render);
+  
+	controls.update();
+  
+	renderer.render(scene, camera);
+}
+  
+init();
+render();
